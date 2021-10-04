@@ -134,7 +134,12 @@ void QWaylandMaterialDecoration::paint(QPaintDevice *device)
 {
     // Set decoration colors of Fluid applications
     if (window()) {
-        QVariant bgColor = window()->property("__material_decoration_backgroundColor");
+        bool active = window()->handle()->isActive();
+
+        QVariant bgColor = active
+            ? window()->property("__material_decoration_backgroundColor")
+            : window()->property("__material_decoration_backgroundInactiveColor");
+
         if (bgColor.isValid()) {
             QColor color = bgColor.value<QColor>();
             if (color != m_backgroundColor) {
@@ -143,7 +148,10 @@ void QWaylandMaterialDecoration::paint(QPaintDevice *device)
             }
         }
 
-        QVariant fgColor = window()->property("__material_decoration_foregroundColor");
+        QVariant fgColor = active
+            ? window()->property("__material_decoration_foregroundColor")
+            : window()->property("__material_decoration_foregroundInactiveColor");
+
         if (fgColor.isValid()) {
             QColor color = fgColor.value<QColor>();
             if (color != m_textColor) {
@@ -355,7 +363,7 @@ void QWaylandMaterialDecoration::processMouseTop(QWaylandInputDevice *inputDevic
         if (local.x() <= margins().left()) {
             // top left bit
             waylandWindow()->setMouseCursor(inputDevice, Qt::SizeFDiagCursor);
-#if QT_VERSION >= QT_VERSION_CHECK(5, 13, 0)
+#if QT_VERSION >= QT_VERSION_CHECK(5, 13, 0) || defined DESKTOP_APP_QT_PATCHED
             startResize(inputDevice, Qt::TopEdge | Qt::LeftEdge, b);
 #else
             startResize(inputDevice, WL_SHELL_SURFACE_RESIZE_TOP_LEFT, b);
@@ -363,7 +371,7 @@ void QWaylandMaterialDecoration::processMouseTop(QWaylandInputDevice *inputDevic
         } else if (local.x() > window()->width() - margins().right()) {
             // top right bit
             waylandWindow()->setMouseCursor(inputDevice, Qt::SizeBDiagCursor);
-#if QT_VERSION >= QT_VERSION_CHECK(5, 13, 0)
+#if QT_VERSION >= QT_VERSION_CHECK(5, 13, 0) || defined DESKTOP_APP_QT_PATCHED
             startResize(inputDevice, Qt::TopEdge | Qt::RightEdge, b);
 #else
             startResize(inputDevice, WL_SHELL_SURFACE_RESIZE_TOP_RIGHT, b);
@@ -371,7 +379,7 @@ void QWaylandMaterialDecoration::processMouseTop(QWaylandInputDevice *inputDevic
         } else {
             // top reszie bit
             waylandWindow()->setMouseCursor(inputDevice, Qt::SplitVCursor);
-#if QT_VERSION >= QT_VERSION_CHECK(5, 13, 0)
+#if QT_VERSION >= QT_VERSION_CHECK(5, 13, 0) || defined DESKTOP_APP_QT_PATCHED
             startResize(inputDevice, Qt::TopEdge, b);
 #else
             startResize(inputDevice, WL_SHELL_SURFACE_RESIZE_TOP, b);
@@ -392,7 +400,7 @@ void QWaylandMaterialDecoration::processMouseBottom(QWaylandInputDevice *inputDe
     if (local.x() <= margins().left()) {
         // bottom left bit
         waylandWindow()->setMouseCursor(inputDevice, Qt::SizeBDiagCursor);
-#if QT_VERSION >= QT_VERSION_CHECK(5, 13, 0)
+#if QT_VERSION >= QT_VERSION_CHECK(5, 13, 0) || defined DESKTOP_APP_QT_PATCHED
         startResize(inputDevice, Qt::BottomEdge | Qt::LeftEdge, b);
 #else
         startResize(inputDevice, WL_SHELL_SURFACE_RESIZE_BOTTOM_LEFT, b);
@@ -400,7 +408,7 @@ void QWaylandMaterialDecoration::processMouseBottom(QWaylandInputDevice *inputDe
     } else if (local.x() > window()->width() - margins().right()) {
         // bottom right bit
         waylandWindow()->setMouseCursor(inputDevice, Qt::SizeFDiagCursor);
-#if QT_VERSION >= QT_VERSION_CHECK(5, 13, 0)
+#if QT_VERSION >= QT_VERSION_CHECK(5, 13, 0) || defined DESKTOP_APP_QT_PATCHED
         startResize(inputDevice, Qt::BottomEdge | Qt::RightEdge, b);
 #else
         startResize(inputDevice, WL_SHELL_SURFACE_RESIZE_BOTTOM_RIGHT, b);
@@ -408,7 +416,7 @@ void QWaylandMaterialDecoration::processMouseBottom(QWaylandInputDevice *inputDe
     } else {
         // bottom bit
         waylandWindow()->setMouseCursor(inputDevice, Qt::SplitVCursor);
-#if QT_VERSION >= QT_VERSION_CHECK(5, 13, 0)
+#if QT_VERSION >= QT_VERSION_CHECK(5, 13, 0) || defined DESKTOP_APP_QT_PATCHED
         startResize(inputDevice, Qt::BottomEdge, b);
 #else
         startResize(inputDevice, WL_SHELL_SURFACE_RESIZE_BOTTOM, b);
@@ -424,7 +432,7 @@ void QWaylandMaterialDecoration::processMouseLeft(QWaylandInputDevice *inputDevi
     Q_UNUSED(mods);
 
     waylandWindow()->setMouseCursor(inputDevice, Qt::SplitHCursor);
-#if QT_VERSION >= QT_VERSION_CHECK(5, 13, 0)
+#if QT_VERSION >= QT_VERSION_CHECK(5, 13, 0) || defined DESKTOP_APP_QT_PATCHED
     startResize(inputDevice, Qt::LeftEdge, b);
 #else
     startResize(inputDevice, WL_SHELL_SURFACE_RESIZE_LEFT, b);
@@ -438,7 +446,7 @@ void QWaylandMaterialDecoration::processMouseRight(QWaylandInputDevice *inputDev
     Q_UNUSED(local);
     Q_UNUSED(mods);
     waylandWindow()->setMouseCursor(inputDevice, Qt::SplitHCursor);
-#if QT_VERSION >= QT_VERSION_CHECK(5, 13, 0)
+#if QT_VERSION >= QT_VERSION_CHECK(5, 13, 0) || defined DESKTOP_APP_QT_PATCHED
     startResize(inputDevice, Qt::RightEdge, b);
 #else
     startResize(inputDevice, WL_SHELL_SURFACE_RESIZE_RIGHT, b);
