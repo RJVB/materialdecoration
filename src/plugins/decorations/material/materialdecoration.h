@@ -34,6 +34,7 @@
 #include <QtGui/QCursor>
 #include <QtGui/QLinearGradient>
 #include <QtGui/QPainter>
+#include <QtGui/QPainterPath>
 #include <QtGui/QPalette>
 
 #include <QtGui/qpa/qwindowsysteminterface.h>
@@ -104,8 +105,7 @@ private:
 
     int dp(int dp) const;
 
-    QBitmap buttonIcon(const QString &name) const;
-
+    bool isMinimizeable() const;
     bool isMaximizeable() const;
 
     Button m_clicking;

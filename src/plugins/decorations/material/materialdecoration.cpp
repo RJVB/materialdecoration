@@ -31,12 +31,17 @@
  ***************************************************************************/
 
 #include <QtMath>
+#include <QPainterPath>
 
 #include "materialdecoration.h"
 
-QT_BEGIN_NAMESPACE
+#if QT_VERSION >= QT_VERSION_CHECK(5,10,0)
+#   define WINDOWSTATES(x)  (x)->windowStates()
+#else
+#   define WINDOWSTATES(x)  (x)->windowState()
+#endif
 
-inline void initResources() { Q_INIT_RESOURCE(material); }
+QT_BEGIN_NAMESPACE
 
 namespace QtWaylandClient {
 
@@ -53,8 +58,6 @@ QWaylandMaterialDecoration::QWaylandMaterialDecoration()
     , m_iconColor("#b4ffffff")
     , m_textColor("#ffffff")
 {
-    initResources();
-
     QTextOption option(Qt::AlignHCenter | Qt::AlignVCenter);
     option.setWrapMode(QTextOption::NoWrap);
     m_windowTitle.setTextOption(option);
@@ -128,7 +131,7 @@ QMargins QWaylandMaterialDecoration::margins() const
     // Title bar is 32dp plus borders
     if (window() && window()->type() == Qt::Popup)
         return QMargins(0, 0, 0, 0);
-    if (waylandWindow() && (waylandWindow()->isMaximized() || waylandWindow()->isFullscreen()))
+    if (window() && ((WINDOWSTATES(window()) & Qt::WindowMaximized) || (WINDOWSTATES(window()) & Qt::WindowFullScreen)))
         return QMargins(0, TITLE_BAR_HEIGHT, 0, 0);
     return QMargins(WINDOW_BORDER, TITLE_BAR_HEIGHT, WINDOW_BORDER, WINDOW_BORDER);
 }
@@ -137,7 +140,12 @@ void QWaylandMaterialDecoration::paint(QPaintDevice *device)
 {
     // Set decoration colors of Fluid applications
     if (window()) {
-        QVariant bgColor = window()->property("__material_decoration_backgroundColor");
+        bool active = window()->handle()->isActive();
+
+        QVariant bgColor = active
+            ? window()->property("__material_decoration_backgroundColor")
+            : window()->property("__material_decoration_backgroundInactiveColor");
+
         if (bgColor.isValid()) {
             QColor color = bgColor.value<QColor>();
             if (color != m_backgroundColor) {
@@ -146,7 +154,10 @@ void QWaylandMaterialDecoration::paint(QPaintDevice *device)
             }
         }
 
-        QVariant fgColor = window()->property("__material_decoration_foregroundColor");
+        QVariant fgColor = active
+            ? window()->property("__material_decoration_foregroundColor")
+            : window()->property("__material_decoration_foregroundInactiveColor");
+
         if (fgColor.isValid()) {
             QColor color = fgColor.value<QColor>();
             if (color != m_textColor) {
@@ -165,7 +176,7 @@ void QWaylandMaterialDecoration::paint(QPaintDevice *device)
     p.setRenderHint(QPainter::Antialiasing);
 
     // Title bar
-    int radius = waylandWindow()->isMaximized() ? 0 : dp(3);
+    int radius = WINDOWSTATES(window()) & Qt::WindowMaximized ? 0 : dp(3);
     QPainterPath roundedRect;
     roundedRect.addRoundedRect(margins().left(), margins().top() - TITLE_BAR_HEIGHT,
                                frameGeometry.width() - margins().left() - margins().right(), TITLE_BAR_HEIGHT + radius * 2,
@@ -207,27 +218,68 @@ void QWaylandMaterialDecoration::paint(QPaintDevice *device)
         p.restore();
     }
 
-    p.save();
-    p.setPen(m_iconColor);
+    // Buttons
+    {
+        QRectF rect;
+        QPen pen(m_iconColor);
+        p.setPen(pen);
 
-    // Close button
-    QBitmap closeIcon = buttonIcon("window-close");
-    p.drawPixmap(closeButtonRect(), closeIcon, closeIcon.rect());
+        // Close button
+        p.save();
+        rect = closeButtonRect();
+        qreal crossSize = rect.height() / 2.3;
+        QPointF crossCenter(rect.center());
+        QRectF crossRect(crossCenter.x() - crossSize / 2, crossCenter.y() - crossSize / 2, crossSize, crossSize);
+        pen.setWidth(2);
+        p.setPen(pen);
+        p.drawLine(crossRect.topLeft(), crossRect.bottomRight());
+        p.drawLine(crossRect.bottomLeft(), crossRect.topRight());
+        p.restore();
 
-    // Maximize button
-    if (isMaximizeable()) {
-        QBitmap maximizeIcon =
-                buttonIcon(waylandWindow()->isMaximized() ? "window-restore" : "window-maximize");
-        p.drawPixmap(maximizeButtonRect(), maximizeIcon, maximizeIcon.rect());
+        // Maximize button
+        if (isMaximizeable()) {
+            p.save();
+            pen.setWidth(2);
+            p.setPen(pen);
+            if (WINDOWSTATES(window()) & Qt::WindowMaximized) {
+                p.setRenderHint(QPainter::Antialiasing, true);
+
+                rect = maximizeButtonRect().adjusted(4, 5, -4, -5);
+
+                qreal inset = 4;
+                QRectF rect1 = rect.adjusted(inset, 0, 0, -inset);
+                QRectF rect2 = rect.adjusted(0, inset, -inset, 0);
+                p.drawRect(rect1);
+                p.setBrush(m_backgroundColor); // need to cover up some lines from the other rect
+                p.drawRect(rect2);
+                p.drawLine(rect2.topLeft() + QPointF(2, 2), rect2.topRight() + QPointF(-2, 2));
+            } else {
+                p.setRenderHint(QPainter::Antialiasing, false);
+
+                rect = maximizeButtonRect().adjusted(5, 5, -5, -5);
+
+                QVector<QLineF> lines;
+                lines.append(QLineF(rect.topLeft(), rect.topRight()));
+                lines.append(QLineF(rect.left(), rect.top() + 2, rect.left(), rect.bottom() - 2));
+                lines.append(QLineF(rect.right(), rect.top() + 2, rect.right(), rect.bottom() - 2));
+                lines.append(QLineF(rect.bottomLeft(), rect.bottomRight()));
+                lines.append(QLineF(rect.left() + 2, rect.top() + 2, rect.right() - 2, rect.top() + 2));
+                p.drawLines(lines);
+            }
+            p.restore();
+        }
+
+        // Minimize button
+        if (isMinimizeable()) {
+            p.save();
+            p.setRenderHint(QPainter::Antialiasing, false);
+            rect = minimizeButtonRect().adjusted(5, 5, -5, -5);
+            pen.setWidth(2);
+            p.setPen(pen);
+            p.drawLine(rect.bottomLeft(), rect.bottomRight());
+            p.restore();
+        }
     }
-
-    // Minimize button
-    if (window()->flags() & Qt::WindowMinimizeButtonHint) {
-        QBitmap minimizeIcon = buttonIcon("window-minimize");
-        p.drawPixmap(minimizeButtonRect(), minimizeIcon, minimizeIcon.rect());
-    }
-
-    p.restore();
 }
 
 bool QWaylandMaterialDecoration::clickButton(Qt::MouseButtons b, Button btn)
@@ -259,8 +311,8 @@ bool QWaylandMaterialDecoration::handleMouse(QWaylandInputDevice *inputDevice, c
             QWindowSystemInterface::handleCloseEvent(window());
     } else if (isMaximizeable() && maximizeButtonRect().contains(local)) {
         if (clickButton(b, Maximize))
-            window()->setWindowState(waylandWindow()->isMaximized() ? Qt::WindowNoState
-                                                                    : Qt::WindowMaximized);
+            window()->setWindowState(WINDOWSTATES(window()) & Qt::WindowMaximized ? Qt::WindowNoState
+                                                                                    : Qt::WindowMaximized);
     } else if (minimizeButtonRect().contains(local)) {
         if (clickButton(b, Minimize))
             window()->setWindowState(Qt::WindowMinimized);
@@ -295,8 +347,8 @@ bool QWaylandMaterialDecoration::handleTouch(QWaylandInputDevice *inputDevice, c
         if (closeButtonRect().contains(local))
             QWindowSystemInterface::handleCloseEvent(window());
         else if (isMaximizeable() && maximizeButtonRect().contains(local))
-            window()->setWindowState(waylandWindow()->isMaximized() ? Qt::WindowNoState
-                                                                    : Qt::WindowMaximized);
+            window()->setWindowState(WINDOWSTATES(window()) & Qt::WindowMaximized ? Qt::WindowNoState
+                                                                                    : Qt::WindowMaximized);
         else if (minimizeButtonRect().contains(local))
             window()->setWindowState(Qt::WindowMinimized);
         else if (local.y() <= margins().top())
@@ -317,15 +369,27 @@ void QWaylandMaterialDecoration::processMouseTop(QWaylandInputDevice *inputDevic
         if (local.x() <= margins().left()) {
             // top left bit
             waylandWindow()->setMouseCursor(inputDevice, Qt::SizeFDiagCursor);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 13, 0) || defined DESKTOP_APP_QT_PATCHED
+            startResize(inputDevice, Qt::TopEdge | Qt::LeftEdge, b);
+#else
             startResize(inputDevice, WL_SHELL_SURFACE_RESIZE_TOP_LEFT, b);
+#endif
         } else if (local.x() > window()->width() - margins().right()) {
             // top right bit
             waylandWindow()->setMouseCursor(inputDevice, Qt::SizeBDiagCursor);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 13, 0) || defined DESKTOP_APP_QT_PATCHED
+            startResize(inputDevice, Qt::TopEdge | Qt::RightEdge, b);
+#else
             startResize(inputDevice, WL_SHELL_SURFACE_RESIZE_TOP_RIGHT, b);
+#endif
         } else {
             // top reszie bit
             waylandWindow()->setMouseCursor(inputDevice, Qt::SplitVCursor);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 13, 0) || defined DESKTOP_APP_QT_PATCHED
+            startResize(inputDevice, Qt::TopEdge, b);
+#else
             startResize(inputDevice, WL_SHELL_SURFACE_RESIZE_TOP, b);
+#endif
         }
     } else {
         waylandWindow()->restoreMouseCursor(inputDevice);
@@ -342,15 +406,27 @@ void QWaylandMaterialDecoration::processMouseBottom(QWaylandInputDevice *inputDe
     if (local.x() <= margins().left()) {
         // bottom left bit
         waylandWindow()->setMouseCursor(inputDevice, Qt::SizeBDiagCursor);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 13, 0) || defined DESKTOP_APP_QT_PATCHED
+        startResize(inputDevice, Qt::BottomEdge | Qt::LeftEdge, b);
+#else
         startResize(inputDevice, WL_SHELL_SURFACE_RESIZE_BOTTOM_LEFT, b);
+#endif
     } else if (local.x() > window()->width() - margins().right()) {
         // bottom right bit
         waylandWindow()->setMouseCursor(inputDevice, Qt::SizeFDiagCursor);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 13, 0) || defined DESKTOP_APP_QT_PATCHED
+        startResize(inputDevice, Qt::BottomEdge | Qt::RightEdge, b);
+#else
         startResize(inputDevice, WL_SHELL_SURFACE_RESIZE_BOTTOM_RIGHT, b);
+#endif
     } else {
         // bottom bit
         waylandWindow()->setMouseCursor(inputDevice, Qt::SplitVCursor);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 13, 0) || defined DESKTOP_APP_QT_PATCHED
+        startResize(inputDevice, Qt::BottomEdge, b);
+#else
         startResize(inputDevice, WL_SHELL_SURFACE_RESIZE_BOTTOM, b);
+#endif
     }
 }
 
@@ -362,7 +438,11 @@ void QWaylandMaterialDecoration::processMouseLeft(QWaylandInputDevice *inputDevi
     Q_UNUSED(mods);
 
     waylandWindow()->setMouseCursor(inputDevice, Qt::SplitHCursor);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 13, 0) || defined DESKTOP_APP_QT_PATCHED
+    startResize(inputDevice, Qt::LeftEdge, b);
+#else
     startResize(inputDevice, WL_SHELL_SURFACE_RESIZE_LEFT, b);
+#endif
 }
 
 void QWaylandMaterialDecoration::processMouseRight(QWaylandInputDevice *inputDevice,
@@ -372,7 +452,11 @@ void QWaylandMaterialDecoration::processMouseRight(QWaylandInputDevice *inputDev
     Q_UNUSED(local);
     Q_UNUSED(mods);
     waylandWindow()->setMouseCursor(inputDevice, Qt::SplitHCursor);
+#if QT_VERSION >= QT_VERSION_CHECK(5, 13, 0) || defined DESKTOP_APP_QT_PATCHED
+    startResize(inputDevice, Qt::RightEdge, b);
+#else
     startResize(inputDevice, WL_SHELL_SURFACE_RESIZE_RIGHT, b);
+#endif
 }
 
 int QWaylandMaterialDecoration::dp(int dp) const
@@ -380,11 +464,10 @@ int QWaylandMaterialDecoration::dp(int dp) const
     return dp;
 }
 
-QBitmap QWaylandMaterialDecoration::buttonIcon(const QString &name) const
+bool QWaylandMaterialDecoration::isMinimizeable() const
 {
-    QIcon icon(":/icons/" + name + ".svg");
-    QPixmap pixmap = icon.pixmap(QSize(BUTTON_WIDTH, BUTTON_WIDTH));
-    return pixmap.createMaskFromColor(QColor("black"), Qt::MaskOutColor);
+    return window()->flags() & Qt::WindowMinimizeButtonHint ||
+            window()->isTopLevel();
 }
 
 bool QWaylandMaterialDecoration::isMaximizeable() const
