@@ -35,6 +35,12 @@
 
 #include "materialdecoration.h"
 
+#if QT_VERSION >= QT_VERSION_CHECK(5,10,0)
+#   define WINDOWSTATES(x)  (x)->windowStates()
+#else
+#   define WINDOWSTATES(x)  (x)->windowState()
+#endif
+
 QT_BEGIN_NAMESPACE
 
 namespace QtWaylandClient {
@@ -125,7 +131,7 @@ QMargins QWaylandMaterialDecoration::margins() const
     // Title bar is 32dp plus borders
     if (window() && window()->type() == Qt::Popup)
         return QMargins(0, 0, 0, 0);
-    if (window() && ((window()->windowStates() & Qt::WindowMaximized) || (window()->windowStates() & Qt::WindowFullScreen)))
+    if (window() && ((WINDOWSTATES(window()) & Qt::WindowMaximized) || (WINDOWSTATES(window()) & Qt::WindowFullScreen)))
         return QMargins(0, TITLE_BAR_HEIGHT, 0, 0);
     return QMargins(WINDOW_BORDER, TITLE_BAR_HEIGHT, WINDOW_BORDER, WINDOW_BORDER);
 }
@@ -170,7 +176,7 @@ void QWaylandMaterialDecoration::paint(QPaintDevice *device)
     p.setRenderHint(QPainter::Antialiasing);
 
     // Title bar
-    int radius = window()->windowStates() & Qt::WindowMaximized ? 0 : dp(3);
+    int radius = WINDOWSTATES(window()) & Qt::WindowMaximized ? 0 : dp(3);
     QPainterPath roundedRect;
     roundedRect.addRoundedRect(margins().left(), margins().top() - TITLE_BAR_HEIGHT,
                                frameGeometry.width() - margins().left() - margins().right(), TITLE_BAR_HEIGHT + radius * 2,
@@ -235,7 +241,7 @@ void QWaylandMaterialDecoration::paint(QPaintDevice *device)
             p.save();
             pen.setWidth(2);
             p.setPen(pen);
-            if (window()->windowStates() & Qt::WindowMaximized) {
+            if (WINDOWSTATES(window()) & Qt::WindowMaximized) {
                 p.setRenderHint(QPainter::Antialiasing, true);
 
                 rect = maximizeButtonRect().adjusted(4, 5, -4, -5);
@@ -305,7 +311,7 @@ bool QWaylandMaterialDecoration::handleMouse(QWaylandInputDevice *inputDevice, c
             QWindowSystemInterface::handleCloseEvent(window());
     } else if (isMaximizeable() && maximizeButtonRect().contains(local)) {
         if (clickButton(b, Maximize))
-            window()->setWindowState(window()->windowStates() & Qt::WindowMaximized ? Qt::WindowNoState
+            window()->setWindowState(WINDOWSTATES(window()) & Qt::WindowMaximized ? Qt::WindowNoState
                                                                                     : Qt::WindowMaximized);
     } else if (minimizeButtonRect().contains(local)) {
         if (clickButton(b, Minimize))
@@ -341,7 +347,7 @@ bool QWaylandMaterialDecoration::handleTouch(QWaylandInputDevice *inputDevice, c
         if (closeButtonRect().contains(local))
             QWindowSystemInterface::handleCloseEvent(window());
         else if (isMaximizeable() && maximizeButtonRect().contains(local))
-            window()->setWindowState(window()->windowStates() & Qt::WindowMaximized ? Qt::WindowNoState
+            window()->setWindowState(WINDOWSTATES(window()) & Qt::WindowMaximized ? Qt::WindowNoState
                                                                                     : Qt::WindowMaximized);
         else if (minimizeButtonRect().contains(local))
             window()->setWindowState(Qt::WindowMinimized);
